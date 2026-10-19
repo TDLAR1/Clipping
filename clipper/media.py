@@ -36,7 +36,7 @@ def fetch_source(source: str, work_dir: Path) -> Path:
         raise SystemExit("yt-dlp is not installed. Run: pip install -r requirements.txt")
 
     work_dir.mkdir(parents=True, exist_ok=True)
-    opts = {
+    base_opts = {
         # Best quality up to 1080p is plenty for a 1080x1920 crop.
         "format": "bv*[height<=1080]+ba/b[height<=1080]/b",
         "merge_output_format": "mp4",
@@ -44,14 +44,48 @@ def fetch_source(source: str, work_dir: Path) -> Path:
         "noplaylist": True,
         "quiet": True,
         "no_warnings": True,
+        "retries": 3,
+        "logger": _QuietLogger(),
     }
+    # YouTube often blocks one of its "clients" for a while; the others usually
+    # still work, so fall back through them before giving up.
+    attempts = [
+        {},
+        {"extractor_args": {"youtube": {"player_client": ["web_embedded", "web", "tv"]}}},
+        {"extractor_args": {"youtube": {"player_client": ["tv"]}}},
+        {"extractor_args": {"youtube": {"player_client": ["web_safari", "mweb"]}}},
+    ]
     print(f"Downloading {source} ...")
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(source, download=True)
-        path = Path(ydl.prepare_filename(info))
-    if not path.exists():
-        path = path.with_suffix(".mp4")
-    return path
+    last_error = None
+    for i, extra in enumerate(attempts):
+        try:
+            with yt_dlp.YoutubeDL({**base_opts, **extra}) as ydl:
+                info = ydl.extract_info(source, download=True)
+                path = Path(ydl.prepare_filename(info))
+            if not path.exists():
+                path = path.with_suffix(".mp4")
+            if path.exists():
+                return path
+        except yt_dlp.utils.DownloadError as e:
+            last_error = e
+            if i + 1 < len(attempts):
+                print("  Download was blocked, trying another way ...")
+    raise SystemExit(
+        f"\nCouldn't download this video ({last_error}).\n"
+        "Sites like YouTube block download tools from time to time. You can:\n"
+        "  1. Try again in a few minutes (the clipper updates its downloader each run).\n"
+        "  2. Get the video file another way (e.g. the campaign's Google Drive link)\n"
+        "     and drag the file into the clipper window instead of pasting a link."
+    )
+
+
+class _QuietLogger:
+    """Keeps yt-dlp's raw errors off screen; we print a clear message instead."""
+
+    def debug(self, msg):
+        pass
+
+    warning = error = debug
 
 
 def probe(path: Path) -> dict:

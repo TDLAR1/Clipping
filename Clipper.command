@@ -20,6 +20,7 @@ fi
 NEED=()
 command -v ffmpeg >/dev/null 2>&1 || NEED+=(ffmpeg)
 [ -x "$(brew --prefix)/bin/python3.12" ] || NEED+=(python@3.12)
+command -v deno >/dev/null 2>&1 || NEED+=(deno)   # yt-dlp needs it for YouTube
 if [ ${#NEED[@]} -gt 0 ]; then
   echo "Installing ${NEED[*]} (one time only)..."
   HOMEBREW_NO_AUTO_UPDATE=1 brew install "${NEED[@]}" || { pause; exit 1; }
@@ -35,6 +36,10 @@ if [ ! -f .venv/.installed ]; then
       -r requirements.txt -q &&
     touch .venv/.installed || { echo "Setup failed - see the message above."; pause; exit 1; }
 fi
+
+# Sites change all the time, so always grab the newest downloader build.
+echo "Checking for downloader updates..."
+.venv/bin/pip install -q -U --pre "yt-dlp[default]" >/dev/null 2>&1 || true
 
 echo
 echo "=========================================="

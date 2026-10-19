@@ -1,7 +1,10 @@
 """Speech-to-text with word timestamps (faster-whisper, runs locally for free)."""
 
 import json
+import os
 import re
+import subprocess
+import sys
 from dataclasses import dataclass, asdict
 from pathlib import Path
 
@@ -27,10 +30,33 @@ class Sentence:
 def transcribe(video: Path, cache: Path, model_size: str = "small",
                language: str | None = None) -> list[Word]:
     """Transcribe once and cache the result next to the work files."""
-    if cache.exists():
+    if not cache.exists():
+        # Whisper runs in its own process: its audio library (PyAV) and OpenCV
+        # each bundle their own ffmpeg, and loading both in one process can
+        # crash on macOS.
+        cmd = [sys.executable, "-m", "clipper.transcribe", str(video.resolve()),
+               str(cache.resolve()), model_size, language or ""]
+        env = {**os.environ, "HF_HUB_VERBOSITY": "error"}
+        result = subprocess.run(cmd, cwd=Path(__file__).resolve().parent.parent, env=env)
+        if result.returncode != 0 or not cache.exists():
+            raise SystemExit("Transcription failed - see the message above.")
+    else:
         print(f"Using cached transcript: {cache}")
-        return [Word(**w) for w in json.loads(cache.read_text())]
+    return [Word(**w) for w in json.loads(cache.read_text())]
 
+
+def _load_audio(video: Path, sr: int = 16000):
+    """Decode audio with the ffmpeg program (avoids PyAV version problems)."""
+    import numpy as np
+    raw = subprocess.run(
+        ["ffmpeg", "-v", "error", "-i", str(video), "-vn", "-ac", "1",
+         "-ar", str(sr), "-f", "s16le", "-"],
+        capture_output=True, check=True,
+    ).stdout
+    return np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
+
+
+def _run_whisper(video: Path, cache: Path, model_size: str, language: str | None):
     try:
         from faster_whisper import WhisperModel
     except ImportError:
@@ -48,7 +74,7 @@ def transcribe(video: Path, cache: Path, model_size: str = "small",
           "(first run downloads the model; long videos take a while) ...")
     model = WhisperModel(model_size, device=device, compute_type=compute)
     segments, info = model.transcribe(
-        str(video),
+        _load_audio(video),
         language=language,
         word_timestamps=True,
         vad_filter=True,
@@ -60,11 +86,11 @@ def transcribe(video: Path, cache: Path, model_size: str = "small",
             text = w.word.strip()
             if text:
                 words.append(Word(text, round(w.start, 3), round(w.end, 3)))
-        print(f"\r  transcribed {seg.end / 60:5.1f} min", end="", flush=True)
+        print(f"\r  transcribed {seg.end / 60:5.1f} of {info.duration / 60:.1f} min",
+              end="", flush=True)
     print()
     cache.parent.mkdir(parents=True, exist_ok=True)
     cache.write_text(json.dumps([asdict(w) for w in words]))
-    return words
 
 
 _END = re.compile(r"[.!?…]['\"”’)]*$")
@@ -81,3 +107,8 @@ def split_sentences(words: list[Word], pause: float = 0.8, max_words: int = 40) 
             sentences.append(Sentence(cur, cur[0].start, cur[-1].end))
             cur = []
     return sentences
+
+
+if __name__ == "__main__":
+    _video, _cache, _model, _lang = sys.argv[1:5]
+    _run_whisper(Path(_video), Path(_cache), _model, _lang or None)

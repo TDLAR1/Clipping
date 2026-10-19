@@ -7,31 +7,32 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 pause() { echo; read -r -p "Press Enter to close this window." _; }
 
-if ! command -v python3 >/dev/null 2>&1 || ! python3 -c "import sys; sys.exit(sys.version_info < (3, 10))" 2>/dev/null; then
-  echo "Python 3.10 or newer is needed. Opening the download page..."
-  echo "Install it, then double-click Clipper.command again."
-  open "https://www.python.org/downloads/"
+if ! command -v brew >/dev/null 2>&1; then
+  echo "Homebrew is needed to install the tools the clipper uses."
+  echo "1. Copy the install line from the page that's opening and paste it into Terminal."
+  echo "2. Then double-click Clipper.command again."
+  open "https://brew.sh"
   pause; exit 1
 fi
 
-if ! command -v ffmpeg >/dev/null 2>&1; then
-  if command -v brew >/dev/null 2>&1; then
-    echo "Installing ffmpeg (one time only)..."
-    brew install ffmpeg || { pause; exit 1; }
-  else
-    echo "ffmpeg is needed, and the easiest way to get it is Homebrew."
-    echo "1. Copy the install line from the page that's opening and paste it into Terminal."
-    echo "2. Then double-click Clipper.command again."
-    open "https://brew.sh"
-    pause; exit 1
-  fi
+# The clipper's parts ship ready-made for Python 3.12, so it gets its own copy
+# instead of whatever (possibly too new) Python is on the Mac.
+NEED=()
+command -v ffmpeg >/dev/null 2>&1 || NEED+=(ffmpeg)
+[ -x "$(brew --prefix)/bin/python3.12" ] || NEED+=(python@3.12)
+if [ ${#NEED[@]} -gt 0 ]; then
+  echo "Installing ${NEED[*]} (one time only)..."
+  HOMEBREW_NO_AUTO_UPDATE=1 brew install "${NEED[@]}" || { pause; exit 1; }
 fi
+PY="$(brew --prefix)/bin/python3.12"
 
 if [ ! -f .venv/.installed ]; then
   echo "Setting up the clipper (one time only, a few minutes)..."
-  python3 -m venv .venv &&
+  rm -rf .venv
+  "$PY" -m venv .venv &&
     .venv/bin/pip install --upgrade pip -q &&
-    .venv/bin/pip install -r requirements.txt -q &&
+    .venv/bin/pip install --only-binary=av,ctranslate2,numpy,opencv-python-headless \
+      -r requirements.txt -q &&
     touch .venv/.installed || { echo "Setup failed - see the message above."; pause; exit 1; }
 fi
 

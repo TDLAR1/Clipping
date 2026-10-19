@@ -25,6 +25,24 @@ What it does to every video:
 
 ---
 
+## Easiest way on a Mac
+
+1. Install **Python** from <https://www.python.org/downloads/> (open the
+   downloaded file and click through the installer).
+2. Install **Homebrew**: open the *Terminal* app, paste the one line shown on
+   <https://brew.sh> and press Enter (it asks for your Mac password; typing it
+   shows nothing, that's normal). When it finishes, copy and run the
+   "Next steps" lines it prints, if any.
+3. Download this project (**Code** → **Download ZIP**) and unzip it.
+4. **Right-click `Clipper.command` → Open → Open.** (Right-click only the first
+   time, because macOS blocks files downloaded from the internet. After that, a
+   normal double-click works.)
+
+The first run installs ffmpeg and everything else by itself. Then it asks for
+a link (or drag a video file into the window) and how many clips, and opens
+the `clips` folder when it's done. If [Ollama](https://ollama.com) is
+installed, it's used automatically for smarter picks and titles.
+
 ## Setup (one time, ~10 minutes)
 
 You need a computer (Windows, Mac or Linux). A phone won't work.

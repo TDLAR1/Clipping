@@ -18,7 +18,9 @@ fi
 # The clipper's parts ship ready-made for Python 3.12, so it gets its own copy
 # instead of whatever (possibly too new) Python is on the Mac.
 NEED=()
-command -v ffmpeg >/dev/null 2>&1 || NEED+=(ffmpeg)
+# Homebrew's plain "ffmpeg" can't draw captions (no libass); "ffmpeg-full" can.
+FFMPEG_DIR="$(brew --prefix)/opt/ffmpeg-full/bin"
+[ -x "$FFMPEG_DIR/ffmpeg" ] || NEED+=(ffmpeg-full)
 [ -x "$(brew --prefix)/bin/python3.12" ] || NEED+=(python@3.12)
 command -v deno >/dev/null 2>&1 || NEED+=(deno)   # yt-dlp needs it for YouTube
 if [ ${#NEED[@]} -gt 0 ]; then
@@ -26,6 +28,7 @@ if [ ${#NEED[@]} -gt 0 ]; then
   HOMEBREW_NO_AUTO_UPDATE=1 brew install "${NEED[@]}" || { pause; exit 1; }
 fi
 PY="$(brew --prefix)/bin/python3.12"
+export PATH="$FFMPEG_DIR:$PATH"
 
 if [ ! -f .venv/.installed ]; then
   echo "Setting up the clipper (one time only, a few minutes)..."

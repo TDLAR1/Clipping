@@ -37,7 +37,7 @@ def render(video: Path, out_file: Path, start: float, end: float, tr: Track,
             except ValueError:  # different drive on Windows
                 rel = str(fonts_dir.resolve())
             fonts = f":fontsdir='{Path(rel).as_posix()}'"
-        video_chain += f",ass=captions.ass{fonts}"
+        video_chain += f",ass=filename=captions.ass{fonts}"
     video_chain += "[v]"
 
     cmd = [

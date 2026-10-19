@@ -9,12 +9,22 @@ from pathlib import Path
 import numpy as np
 
 
-def require_ffmpeg():
+def require_ffmpeg(captions: bool = True):
     for tool in ("ffmpeg", "ffprobe"):
         if not shutil.which(tool):
             raise SystemExit(
                 f"'{tool}' was not found. Install ffmpeg first (see README.md) "
                 "and make sure it is on your PATH."
+            )
+    if captions:
+        filters = subprocess.run(["ffmpeg", "-hide_banner", "-filters"],
+                                 capture_output=True, text=True).stdout
+        if not re.search(r"\bass\b", filters):
+            raise SystemExit(
+                "Your ffmpeg can't draw captions (it was built without libass).\n"
+                "  Mac: run  brew install ffmpeg-full  (Clipper.command does this for you)\n"
+                "  Windows: winget install Gyan.FFmpeg\n"
+                "Or add --no-captions to make clips without captions."
             )
 
 

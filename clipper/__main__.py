@@ -7,6 +7,7 @@
 import argparse
 import json
 import re
+import subprocess
 import time
 from pathlib import Path
 
@@ -66,7 +67,7 @@ def main(argv=None):
         args.source = input("Paste a video link or file path: ").strip().strip('"')
     if args.min_len >= args.max_len:
         raise SystemExit("--min must be smaller than --max")
-    media.require_ffmpeg()
+    media.require_ffmpeg(captions=not args.no_captions)
     t0 = time.time()
 
     video = media.fetch_source(args.source, args.work / "downloads")
@@ -128,17 +129,24 @@ def main(argv=None):
             style=args.caption_color, uppercase=not args.lowercase,
             position=args.caption_pos, title=clip.title, title_seconds=args.title_seconds,
         )
-        render.render(video, out_dir / fname, start, end, tr, ass, work / f"clip{i:02d}",
-                      info["fps"], fonts_dir, crf, preset)
+        try:
+            render.render(video, out_dir / fname, start, end, tr, ass, work / f"clip{i:02d}",
+                          info["fps"], fonts_dir, crf, preset)
+        except subprocess.CalledProcessError:
+            print(f"  ffmpeg couldn't make this clip (see the message above); skipping it.")
+            entry["file"] = None
 
     (out_dir / "clips.json").write_text(json.dumps(report, indent=2))
     with open(out_dir / "clips.txt", "w", encoding="utf-8") as f:
         for e in report:
+            if not e["file"] and not args.dry_run:
+                continue
             f.write(f"{e['file']}\n  Title: {e['title']}\n  Score: {e['score']}"
                     f"  ({_mmss(e['start'])}-{_mmss(e['end'])} in the original)\n"
                     f"  Says: {e['transcript']}\n\n")
     verb = "Picked" if args.dry_run else "Made"
-    print(f"\n{verb} {len(report)} clips in {(time.time() - t0) / 60:.1f} min -> {out_dir.resolve()}")
+    made = len(report) if args.dry_run else sum(1 for e in report if e["file"])
+    print(f"\n{verb} {made} clips in {(time.time() - t0) / 60:.1f} min -> {out_dir.resolve()}")
 
 
 def _mmss(t: float) -> str:

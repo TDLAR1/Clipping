@@ -43,11 +43,32 @@ def _post(url: str, payload: dict, headers: dict, timeout: int = 600) -> dict:
         return json.loads(resp.read())
 
 
+def _ollama_host() -> str:
+    host = os.environ.get("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
+    return host if host.startswith("http") else f"http://{host}"
+
+
+def _ollama_model(wanted: str | None) -> str:
+    """The requested model if it's downloaded, else the best one that is."""
+    with urllib.request.urlopen(f"{_ollama_host()}/api/tags", timeout=10) as resp:
+        installed = [m["name"] for m in json.loads(resp.read()).get("models", [])]
+    if not installed:
+        raise RuntimeError("Ollama has no models yet - run: ollama pull llama3.1:8b")
+    wanted = wanted or "llama3.1:8b"
+    for name in installed:
+        if name == wanted or name.split(":")[0] == wanted.split(":")[0]:
+            return name
+    usable = [n for n in installed if "embed" not in n]
+    if not usable:
+        raise RuntimeError("Ollama has no chat models - run: ollama pull llama3.1:8b")
+    print(f"  ('{wanted}' isn't downloaded in Ollama, using '{usable[0]}')")
+    return usable[0]
+
+
 def _ask(provider: str, model: str | None, prompt: str) -> str:
     if provider == "ollama":
-        host = os.environ.get("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
-        data = _post(f"{host}/api/chat", {
-            "model": model or "llama3.1:8b",
+        data = _post(f"{_ollama_host()}/api/chat", {
+            "model": model,
             "messages": [{"role": "user", "content": prompt}],
             "format": "json",
             "stream": False,
@@ -79,7 +100,13 @@ def _parse(reply: str) -> list[dict]:
 
 def rerank(clips, provider: str, model: str | None, batch: int = 10) -> bool:
     """Score clips in place with the LLM. Returns False if the LLM was unreachable."""
-    print(f"Asking the AI ({provider}) to rate {len(clips)} candidate clips ...")
+    if provider == "ollama":
+        try:
+            model = _ollama_model(model)
+        except (urllib.error.URLError, RuntimeError, TimeoutError) as e:
+            print(f"AI step skipped ({e}). Using the built-in scoring only.")
+            return False
+    print(f"Asking the AI ({model or provider}) to rate {len(clips)} candidate clips ...")
     for b in range(0, len(clips), batch):
         group = clips[b:b + batch]
         listing = "\n\n".join(

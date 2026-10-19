@@ -1,0 +1,184 @@
+"""Turning a wide video into a vertical one that follows the speaker.
+
+Faces are detected a few times per second, then turned into a steady "camera":
+it holds still while the face stays in frame, re-centres only when the person
+really moves, and cuts instantly on scene changes or when the shot jumps to
+someone else. That holds-then-cuts style is what the paid AI clippers do and
+looks far better than a camera that wobbles after every head movement.
+"""
+
+from dataclasses import dataclass
+
+import cv2
+import numpy as np
+
+SAMPLE_FPS = 5
+DETECT_WIDTH = 480
+
+
+@dataclass
+class Track:
+    layout: str                 # "crop" (follow the face) or "fit" (blurred background)
+    crop_w: int = 0
+    keyframes: list = None      # [(time_in_clip, x_pixels)]
+    face_ratio: float = 0.0
+
+
+def _detectors():
+    base = cv2.data.haarcascades
+    front = cv2.CascadeClassifier(base + "haarcascade_frontalface_default.xml")
+    profile = cv2.CascadeClassifier(base + "haarcascade_profileface.xml")
+    return front, profile
+
+
+def _faces(gray, front, profile, min_size):
+    found = []
+    for det, flip in ((front, False), (profile, False), (profile, True)):
+        img = cv2.flip(gray, 1) if flip else gray
+        boxes = det.detectMultiScale(img, scaleFactor=1.1, minNeighbors=6,
+                                     minSize=(min_size, min_size))
+        for (x, y, w, h) in boxes:
+            if flip:
+                x = gray.shape[1] - x - w
+            found.append((x + w / 2, w))
+        if found and det is front:
+            break  # frontal hits are the most reliable; skip profile search
+    return found
+
+
+def _sample(video_path, start, end):
+    """Yield (time_in_clip, small_gray_frame) about SAMPLE_FPS times a second."""
+    cap = cv2.VideoCapture(str(video_path))
+    cap.set(cv2.CAP_PROP_POS_MSEC, start * 1000)
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30
+    step = max(1, round(fps / SAMPLE_FPS))
+    i = 0
+    while True:
+        ok = cap.grab()
+        if not ok:
+            break
+        t = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000
+        if t > end:
+            break
+        if i % step == 0:
+            ok, frame = cap.retrieve()
+            if ok:
+                h, w = frame.shape[:2]
+                scale = DETECT_WIDTH / w
+                small = cv2.resize(frame, (DETECT_WIDTH, int(h * scale)))
+                yield max(0.0, t - start), cv2.cvtColor(small, cv2.COLOR_BGR2GRAY), scale
+        i += 1
+    cap.release()
+
+
+def _pick_targets(samples, frame_w):
+    """One face x-position (or None) per sample, preferring to stay on the same person."""
+    targets, prev = [], None
+    for faces in samples:
+        if not faces:
+            targets.append(None)
+            continue
+        biggest = max(f[1] for f in faces)
+        choice = max(faces, key=lambda f: f[1])
+        if prev is not None:
+            near = [f for f in faces if abs(f[0] - prev) < frame_w * 0.12 and f[1] > 0.6 * biggest]
+            if near:
+                choice = near[0]
+        prev = choice[0]
+        targets.append(prev)
+    # Fill short detection dropouts (<1.2 s) with the last known position.
+    last, gap = None, 0
+    for i, t in enumerate(targets):
+        if t is None:
+            gap += 1
+            if last is not None and gap <= SAMPLE_FPS * 1.2:
+                targets[i] = last
+        else:
+            last, gap = t, 0
+    return targets
+
+
+def track(video_path, start, end, frame_w, frame_h, layout="auto") -> Track:
+    out_ratio = 9 / 16
+    if frame_w / frame_h <= out_ratio + 0.01 or layout == "blur":
+        return Track("fit")
+    crop_w = int(round(frame_h * out_ratio / 2) * 2)
+    center_x = (frame_w - crop_w) // 2
+    if layout == "center":
+        return Track("crop", crop_w, [(0.0, center_x, "cut")], 0.0)
+
+    front, profile = _detectors()
+    times, faces, cuts, prev_hist = [], [], [], None
+    for t, gray, scale in _sample(video_path, start, end):
+        min_size = max(24, int(gray.shape[0] * 0.08))
+        faces.append([(x / scale, w / scale) for x, w in _faces(gray, front, profile, min_size)])
+        hist = cv2.calcHist([gray], [0], None, [32], [0, 256])
+        cv2.normalize(hist, hist)
+        cuts.append(prev_hist is not None and
+                    cv2.compareHist(prev_hist, hist, cv2.HISTCMP_CORREL) < 0.6)
+        prev_hist = hist
+        times.append(t)
+
+    if not times:
+        return Track("crop", crop_w, [(0.0, center_x, "cut")], 0.0)
+    face_ratio = sum(bool(f) for f in faces) / len(faces)
+    if layout == "auto" and face_ratio < 0.3:
+        return Track("fit", face_ratio=face_ratio)
+
+    targets = _pick_targets(faces, frame_w)
+    max_x = frame_w - crop_w
+
+    def to_x(face_center):
+        return int(np.clip(face_center - crop_w / 2, 0, max_x))
+
+    def settle(i):
+        """Where to put the camera from sample i: median face position over the next ~1 s."""
+        window = [t for t in targets[i:i + SAMPLE_FPS] if t is not None]
+        return to_x(float(np.median(window))) if window else None
+
+    keyframes = []
+    cam = next((settle(i) for i in range(len(targets)) if settle(i) is not None), center_x)
+    keyframes.append((0.0, cam, "cut"))
+    dead_zone = crop_w * 0.22        # face may drift this far from centre before we move
+    patience = int(SAMPLE_FPS * 0.8)  # ...for this many samples in a row
+    drift = 0
+    for i in range(1, len(times)):
+        if cuts[i]:
+            new = settle(i)
+            if new is not None and new != cam:
+                cam = new
+                keyframes.append((times[i], cam, "cut"))
+            drift = 0
+            continue
+        t = targets[i]
+        if t is None or abs(to_x(t) - cam) <= dead_zone:
+            drift = 0
+            continue
+        drift += 1
+        if drift >= patience:
+            new = settle(i - patience + 1) or to_x(t)
+            jump = abs(new - cam)
+            kind = "cut" if jump > crop_w * 0.6 else "ease"
+            cam = new
+            keyframes.append((times[i - patience + 1], cam, kind))
+            drift = 0
+    return Track("crop", crop_w, keyframes, face_ratio)
+
+
+def sendcmd_script(tr: Track, ease_time: float = 0.45, step: float = 0.04) -> str:
+    """ffmpeg sendcmd lines that move the crop window along the camera path."""
+    lines = []
+    cam = tr.keyframes[0][1]
+    lines.append(f"0.0 crop x {cam};")
+    for kf in tr.keyframes[1:]:
+        t, x, kind = kf
+        if kind == "cut":
+            lines.append(f"{t:.3f} crop x {x};")
+        else:
+            n = max(1, int(ease_time / step))
+            for k in range(1, n + 1):
+                p = k / n
+                p = p * p * (3 - 2 * p)  # smoothstep
+                lines.append(f"{t + k * step:.3f} crop x {int(cam + (x - cam) * p)};")
+        cam = x
+    return "\n".join(lines) + "\n"

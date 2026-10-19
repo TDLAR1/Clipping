@@ -147,3 +147,17 @@ built-in scoring.
 - **Read the campaign rules**: required tags, links, or banned edits.
 - Long videos give the clipper more to choose from; ask for more clips
   (`-n 15`) and post only the best.
+
+---
+
+## Copy the style of a Short you like
+
+Double-click **`Analyze Style.command`** (Mac) or run
+`python -m clipper.analyze "LINK"`. It downloads the Short and saves, in the
+`style` folder:
+
+- `1-hook-first-seconds.png`: 12 frames from the first seconds, to show the hook and caption animation
+- `2-whole-video.png`: 16 frames across the whole video
+- `report.txt`: length, cuts, talking speed and the timed transcript
+
+Send those to Claude and ask it to tune the clipper to match.

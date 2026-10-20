@@ -161,3 +161,23 @@ Double-click **`Analyze Style.command`** (Mac) or run
 - `report.txt`: length, cuts, talking speed and the timed transcript
 
 Send those to Claude and ask it to tune the clipper to match.
+
+---
+
+## Campaigns
+
+A folder in `campaigns/` holds one campaign's rules. `Clipper.command` asks
+which campaign you're clipping for (or run `python -m clipper LINK --campaign
+wellness-allegedly`). The clipper then:
+
+- uses the campaign's settings from `options.txt` (e.g. 15 clips split into
+  `TikTok/`, `Instagram/` and `YouTube/` folders, so no moment is posted twice)
+- gives the AI the rules in `brief.txt`, so it skips moments that break them
+  and writes titles, post captions and hashtags in the campaign's style
+- censors flagged words (S\*x etc.) in captions, titles and post text
+  (`censor.txt` adds more)
+- shows `logo.png` (if you put one in the folder) at the top for the first seconds
+- adds `post.txt` (handle, link, hashtags) under every post caption in `clips.txt`
+
+Captions are kept slightly left of center so they stay clear of the
+platforms' buttons.

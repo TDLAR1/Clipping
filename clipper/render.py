@@ -11,7 +11,8 @@ OUT_W, OUT_H = 1080, 1920
 
 def render(video: Path, out_file: Path, start: float, end: float, tr: Track,
            ass_text: str | None, work: Path, fps: float, fonts_dir: Path | None = None,
-           crf: int = 20, preset: str = "medium"):
+           crf: int = 20, preset: str = "medium", logo: Path | None = None,
+           logo_seconds: float = 4.0):
     work.mkdir(parents=True, exist_ok=True)
     # ffmpeg filter paths are awkward on Windows (drive colons), so filter
     # input files are written to `work` and referenced relative to it.
@@ -28,6 +29,11 @@ def render(video: Path, out_file: Path, start: float, end: float, tr: Track,
             f"[fg]scale={OUT_W}:{OUT_H}:force_original_aspect_ratio=decrease:flags=lanczos[fgs];"
             f"[bgb][fgs]overlay=(W-w)/2:(H-h)/2,setsar=1"
         )
+    if logo:
+        # Logo at the top for the first seconds, fading out.
+        fade_at = max(0.0, min(logo_seconds, end - start) - 0.5)
+        video_chain += (f"[base];[1:v]format=rgba,fade=t=out:st={fade_at:.2f}:d=0.5:alpha=1[lg];"
+                        f"[base][lg]overlay=x=(W-w)/2:y=150:eof_action=pass")
     if ass_text:
         (work / "captions.ass").write_text(ass_text, encoding="utf-8")
         fonts = ""
@@ -43,6 +49,8 @@ def render(video: Path, out_file: Path, start: float, end: float, tr: Track,
     cmd = [
         "ffmpeg", "-y", "-v", "error", "-stats",
         "-ss", f"{start:.3f}", "-t", f"{end - start:.3f}", "-i", str(video.resolve()),
+        *(["-loop", "1", "-t", f"{min(logo_seconds, end - start):.2f}", "-i",
+           str(logo.resolve())] if logo else []),
         "-filter_complex", video_chain,
         "-map", "[v]", "-map", "0:a?",
         "-r", f"{min(fps, 60):.3f}",

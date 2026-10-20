@@ -1,0 +1,11 @@
+Show: "Wellness, Allegedly", a comedy wellness podcast hosted by Sally Cotching. She talks to guests about wellness trends, hot takes and what actually sticks, and doesn't take wellness too seriously. Episodes include Sally's own "experiment" segment. Tone: warm, funny, curious, never judgey.
+
+Pick moments that are funny, surprising, relatable or useful, with a strong first 2 seconds (a funny line, a surprising claim, a good question), one clear idea or story that makes sense with no context, and a natural ending (punchline, reaction, question or takeaway).
+
+REJECT (follows_rules = false) any clip that:
+- is rage-bait, or would make male viewers angry, or sets men against women ("men are the problem" / "women are the problem" framing)
+- only works by taking a line out of context, or misrepresents what a speaker meant
+- is hateful about any person or group
+- is mean-spirited or judgey rather than playful
+
+Titles and captions: short, funny, curious (a question, a one-line tease, or a quote from the clip). Never inflammatory, never gender-war framing, never misleading. Censor words platforms flag with an asterisk, e.g. "S*x". Don't tag guests' handles.

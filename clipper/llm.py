@@ -24,10 +24,12 @@ Punish: clips that need earlier context to make sense, rambling, starting or \
 ending mid-thought, and small talk.
 
 For each clip also write a short, punchy title (max 8 words, no hashtags, no \
-quotes) that would make someone watch.
-
+quotes) that would make someone watch, a post caption for TikTok/Reels/Shorts \
+(one or two short sentences), and 2-4 hashtags specific to the clip's topic.
+{brief}
 Reply with JSON only, in exactly this shape:
-{{"clips": [{{"id": 0, "score": 87, "title": "...", "reason": "one short sentence"}}]}}
+{{"clips": [{{"id": 0, "score": 87, "title": "...", "caption": "...", \
+"hashtags": ["#topic"], "follows_rules": true, "reason": "one short sentence"}}]}}
 
 Candidates:
 {candidates}
@@ -98,7 +100,14 @@ def _parse(reply: str) -> list[dict]:
     return data.get("clips", data if isinstance(data, list) else [])
 
 
-def rerank(clips, provider: str, model: str | None, batch: int = 10) -> bool:
+BRIEF = """
+THE CAMPAIGN'S RULES (a clip that breaks any of them gets rejected, so set \
+"follows_rules" to false and score it 0; titles and captions must follow them too):
+{rules}
+"""
+
+
+def rerank(clips, provider: str, model: str | None, batch: int = 10, brief: str = "") -> bool:
     """Score clips in place with the LLM. Returns False if the LLM was unreachable."""
     if provider == "ollama":
         try:
@@ -113,7 +122,9 @@ def rerank(clips, provider: str, model: str | None, batch: int = 10) -> bool:
             f"[id {i}] ({c.duration:.0f}s) {c.text[:1500]}" for i, c in enumerate(group)
         )
         try:
-            results = _parse(_ask(provider, model, PROMPT.format(candidates=listing)))
+            prompt = PROMPT.format(candidates=listing,
+                                   brief=BRIEF.format(rules=brief) if brief else "")
+            results = _parse(_ask(provider, model, prompt))
         except (urllib.error.URLError, RuntimeError, ValueError, KeyError,
                 json.JSONDecodeError, TimeoutError) as e:
             print(f"  AI step skipped ({e}). Using the built-in scoring only.")
@@ -126,6 +137,14 @@ def rerank(clips, provider: str, model: str | None, batch: int = 10) -> bool:
                 continue
             c.title = str(r.get("title", "")).strip().strip('"') or c.title
             c.reason = str(r.get("reason", "")).strip()
+            c.caption = str(r.get("caption", "")).strip()
+            tags = r.get("hashtags") or []
+            c.hashtags = [t if t.startswith("#") else f"#{t}"
+                          for t in (tags if isinstance(tags, list) else str(tags).split())
+                          if str(t).strip()]
+            if r.get("follows_rules") is False:
+                c.llm_score = 0.0
+                c.reason = f"Breaks campaign rules: {c.reason}"
     for c in clips:
         if c.llm_score is not None:
             c.score = 0.35 * c.heuristic + 0.65 * c.llm_score

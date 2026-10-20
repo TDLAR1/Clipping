@@ -60,6 +60,9 @@ class Clip:
     llm_score: float | None = None
     title: str = ""
     reason: str = ""
+    caption: str = ""
+    hashtags: list = field(default_factory=list)
+    platform: str = ""
     signals: dict = field(default_factory=dict)
 
     @property

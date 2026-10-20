@@ -2,6 +2,8 @@
 
 import re
 
+from .campaign import censor
+
 STYLES = {
     # name: (text colour, highlight colour, outline colour) in ASS &HBBGGRR order
     "yellow": ("&H00FFFFFF", "&H0000E5FF", "&H00000000"),
@@ -39,7 +41,8 @@ def _chunks(words, max_words: int, max_chars: int):
 def build_ass(words, clip_start: float, clip_end: float, *, font: str = "Arial Black",
               size: int = 84, style: str = "yellow", uppercase: bool = True,
               max_words: int = 3, max_chars: int = 18, position: float = 0.70,
-              title: str | None = None, title_seconds: float = 0.0) -> str:
+              title: str | None = None, title_seconds: float = 0.0,
+              censor_words: dict | None = None) -> str:
     """ASS subtitle file for one 1080x1920 clip. Times are relative to clip_start."""
     base, hi, outline = STYLES.get(style, STYLES["yellow"])
     margin_v = int(1920 * (1 - position))
@@ -52,7 +55,7 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Cap,{font},{size},{base},{base},{outline},&H80000000,-1,0,0,0,100,100,1,0,1,7,3,2,60,60,{margin_v},1
+Style: Cap,{font},{size},{base},{base},{outline},&H80000000,-1,0,0,0,100,100,1,0,1,7,3,2,80,170,{margin_v},1
 Style: Title,{font},62,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,3,18,0,8,80,80,190,1
 
 [Events]
@@ -60,7 +63,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
     events = []
     if title and title_seconds > 0:
-        t = _safe(title.upper() if uppercase else title)
+        t = _safe(censor(title.upper() if uppercase else title, censor_words))
         events.append(f"Dialogue: 1,{_ts(0)},{_ts(min(title_seconds, clip_end - clip_start))},"
                       f"Title,,0,0,0,,{{\\fad(150,250)}}{t}")
 
@@ -70,7 +73,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         nxt_start = chunks[ci + 1][0].start if ci + 1 < len(chunks) else clip_end
         # Keep the caption up through short pauses so it doesn't flicker.
         chunk_end = nxt_start if nxt_start - chunk[-1].end < 0.6 else chunk[-1].end + 0.25
-        labels = [_safe(w.text.upper() if uppercase else w.text) for w in chunk]
+        labels = [_safe(censor(w.text.upper() if uppercase else w.text, censor_words))
+                  for w in chunk]
         for k, w in enumerate(chunk):
             start = w.start
             end = chunk[k + 1].start if k + 1 < len(chunk) else chunk_end

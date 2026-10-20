@@ -9,3 +9,4 @@ work/
 *.webm
 *.m4a
 style/
+campaigns/*/logo.png

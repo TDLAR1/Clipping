@@ -1,0 +1,8 @@
+# Extra words to censor for this campaign (word=replacement)
+orgasm=org*sm
+orgasms=org*sms
+vagina=vag*na
+penis=p*nis
+horny=h*rny
+masturbate=m*sturbate
+masturbation=m*sturbation

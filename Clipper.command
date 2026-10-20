@@ -55,16 +55,34 @@ SRC="${SRC#\'}"; SRC="${SRC%\'}"; SRC="${SRC#\"}"; SRC="${SRC%\"}"
 SRC="$(echo "$SRC" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
 [ -z "$SRC" ] && { echo "Nothing entered."; pause; exit 1; }
 
-read -r -p "How many clips? (press Enter for 6): " COUNT
-COUNT="${COUNT:-6}"
-
 EXTRA=()
+CAMPAIGNS=()
+for d in campaigns/*/; do [ -d "$d" ] && CAMPAIGNS+=("$(basename "$d")"); done
+CAMPAIGN=""
+if [ ${#CAMPAIGNS[@]} -gt 0 ]; then
+  echo
+  echo "Making clips for a campaign? Type its number, or press Enter for none:"
+  for i in "${!CAMPAIGNS[@]}"; do echo "  $((i + 1)). ${CAMPAIGNS[$i]}"; done
+  read -r PICK
+  if [[ "$PICK" =~ ^[0-9]+$ ]] && [ "$PICK" -ge 1 ] && [ "$PICK" -le ${#CAMPAIGNS[@]} ]; then
+    CAMPAIGN="${CAMPAIGNS[$((PICK - 1))]}"
+    EXTRA+=(--campaign "$CAMPAIGN")
+    [ -f "campaigns/$CAMPAIGN/logo.png" ] ||
+      echo "(Tip: put the campaign's logo in campaigns/$CAMPAIGN as logo.png to show it on clips.)"
+  fi
+fi
+
+if [ -z "$CAMPAIGN" ]; then
+  read -r -p "How many clips? (press Enter for 6): " COUNT
+  EXTRA+=(-n "${COUNT:-6}")
+fi
+
 if command -v ollama >/dev/null 2>&1; then
   echo "Ollama found - using it to pick the best moments and write titles."
   EXTRA+=(--llm ollama)
 fi
 
-.venv/bin/python -m clipper "$SRC" -n "$COUNT" "${EXTRA[@]}"
+.venv/bin/python -m clipper "$SRC" "${EXTRA[@]}"
 STATUS=$?
 if [ $STATUS -eq 0 ]; then
   open clips

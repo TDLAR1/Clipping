@@ -21,6 +21,17 @@ def render(video: Path, out_file: Path, start: float, end: float, tr: Track,
         x0 = tr.keyframes[0][1]
         video_chain = (f"[0:v]sendcmd=f=camera.txt,crop=w={tr.crop_w}:h=ih:x={x0}:y=0,"
                        f"scale={OUT_W}:{OUT_H}:flags=lanczos,setsar=1")
+    elif tr.layout == "split":
+        # Facecam on top, gameplay below: the usual look for gaming clips.
+        cx, cy, cw, ch = tr.cam
+        gx, gy, gw, gh = tr.game
+        top_h = int(round(OUT_W * ch / cw / 2) * 2)
+        video_chain = (
+            f"[0:v]split=2[cam][game];"
+            f"[cam]crop={cw}:{ch}:{cx}:{cy},scale={OUT_W}:{top_h}:flags=lanczos[top];"
+            f"[game]crop={gw}:{gh}:{gx}:{gy},scale={OUT_W}:{OUT_H - top_h}:flags=lanczos[bot];"
+            f"[top][bot]vstack,setsar=1"
+        )
     else:
         video_chain = (
             f"[0:v]split=2[bg][fg];"

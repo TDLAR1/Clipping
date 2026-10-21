@@ -1,6 +1,6 @@
 # Total Drama Roblox clipping campaign (Vyro, $2.50 CPM, 5k views min per post)
 # 15 different moments: 5 for each platform (the same moment twice gets rejected).
-# Roblox gameplay with a small facecam, so use the blurred-background layout
-# instead of cropping onto the face and losing the game.
+# Roblox gameplay with StinkyAsher's facecam in the top-right corner: put the
+# facecam on top and the gameplay below it.
 # Min 20 s keeps every clip safely over the campaign's 15-second minimum.
--n 15 --min 20 --max 50 --layout blur --language en --title-seconds 3 --platforms TikTok,Instagram,YouTube
+-n 15 --min 20 --max 50 --layout split --cam 1332:0:586:330 --language en --title-seconds 3 --platforms TikTok,Instagram,YouTube

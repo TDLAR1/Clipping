@@ -18,10 +18,12 @@ DETECT_WIDTH = 480
 
 @dataclass
 class Track:
-    layout: str                 # "crop" (follow the face) or "fit" (blurred background)
+    layout: str                 # "crop" (follow the face), "fit" (blurred background) or "split"
     crop_w: int = 0
     keyframes: list = None      # [(time_in_clip, x_pixels)]
     face_ratio: float = 0.0
+    cam: tuple = None           # split: facecam box (x, y, w, h) in source pixels
+    game: tuple = None          # split: gameplay box (x, y, w, h) in source pixels
 
 
 def _detectors():
@@ -98,10 +100,29 @@ def _pick_targets(samples, frame_w):
     return targets
 
 
-def track(video_path, start, end, frame_w, frame_h, layout="auto") -> Track:
+def split_boxes(cam, frame_w, frame_h, out_w=1080, out_h=1920):
+    """Facecam on top, gameplay below: pick the gameplay crop that fills the rest.
+
+    The gameplay crop is full height and kept clear of the facecam when it sits
+    at a side, so the streamer doesn't appear twice."""
+    cx, cy, cw, ch = cam
+    top_h = int(round(out_w * ch / cw / 2) * 2)
+    game_w = min(frame_w, int(round(frame_h * out_w / (out_h - top_h) / 2) * 2))
+    game_x = (frame_w - game_w) // 2
+    if cx + cw / 2 > frame_w / 2:
+        game_x = min(game_x, cx - game_w)
+    else:
+        game_x = max(game_x, cx + cw)
+    game_x = int(np.clip(game_x, 0, frame_w - game_w))
+    return top_h, (game_x, 0, game_w, frame_h)
+
+
+def track(video_path, start, end, frame_w, frame_h, layout="auto", cam=None) -> Track:
     out_ratio = 9 / 16
     if frame_w / frame_h <= out_ratio + 0.01 or layout == "blur":
         return Track("fit")
+    if layout == "split":
+        return Track("split", cam=cam, game=split_boxes(cam, frame_w, frame_h)[1])
     crop_w = int(round(frame_h * out_ratio / 2) * 2)
     center_x = (frame_w - crop_w) // 2
     if layout == "center":

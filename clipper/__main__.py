@@ -53,8 +53,10 @@ def parse_args(argv=None):
     g.add_argument("--llm-model", help="model name, e.g. llama3.1:8b for Ollama")
 
     g = p.add_argument_group("look")
-    g.add_argument("--layout", choices=["auto", "face", "center", "blur"], default="auto",
-                   help="auto: follow faces, or blurred background when there are none (default)")
+    g.add_argument("--layout", choices=["auto", "face", "center", "blur", "split"], default="auto",
+                   help="auto: follow faces, or blurred background when there are none (default); "
+                        "split: facecam on top, gameplay below (needs --cam)")
+    g.add_argument("--cam", help="split layout: the facecam's box in the source video, X:Y:W:H in pixels")
     g.add_argument("--no-captions", action="store_true", help="don't burn in captions")
     g.add_argument("--caption-color", choices=sorted(captions.STYLES), default="yellow")
     g.add_argument("--font", default="Arial Black", help="caption font (default Arial Black)")
@@ -88,6 +90,13 @@ def main(argv=None):
         args.source = input("Paste a video link or file path: ").strip().strip('"')
     if args.min_len >= args.max_len:
         raise SystemExit("--min must be smaller than --max")
+    cam = None
+    if args.layout == "split":
+        try:
+            cam = tuple(int(v) for v in (args.cam or "").split(":"))
+            assert len(cam) == 4 and cam[2] > 0 and cam[3] > 0
+        except (ValueError, AssertionError):
+            raise SystemExit("--layout split needs the facecam box, e.g. --cam 1332:0:586:330 (X:Y:W:H)")
     media.require_ffmpeg(captions=not args.no_captions)
     t0 = time.time()
 
@@ -165,8 +174,9 @@ def main(argv=None):
         if args.dry_run:
             continue
 
-        tr = reframe.track(video, start, end, info["width"], info["height"], args.layout)
-        entry["layout"] = "face-tracking" if tr.layout == "crop" else "blurred background"
+        tr = reframe.track(video, start, end, info["width"], info["height"], args.layout, cam)
+        entry["layout"] = {"crop": "face-tracking", "split": "facecam + gameplay"}.get(
+            tr.layout, "blurred background")
         ass = None if args.no_captions else captions.build_ass(
             clip.words, start, end, font=args.font, size=args.font_size,
             style=args.caption_color, uppercase=not args.lowercase,

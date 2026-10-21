@@ -10,6 +10,11 @@ TOURNAMENT", from the campaign's Frame.io link: https://f.io/7acN1ASv
 3. You get 15 clips in `clips/<video>/TikTok`, `/Instagram` and `/YouTube`,
    plus `clips.txt` with the caption to paste for each one.
 
+Layout: StinkyAsher's facecam (top-right of the video) goes on top and the
+Roblox gameplay below it (`--layout split --cam 1332:0:586:330` in
+`options.txt`). For another creator's video, change `--cam` to where their
+facecam is (X:Y:width:height in pixels), or use `--layout blur`.
+
 No logo: the brief bans logos, hashtags or watermarks that aren't part of the
 campaign, so leave `logo.png` out unless the campaign gives you one.
 

@@ -1,0 +1,10 @@
+Show: "Total Drama Roblox", a streamer tournament inspired by Total Drama Island, played in Roblox by a group of popular creators. This video is StinkyAsher's: "I PLAYED IN THE FIRST EVER TOTAL DRAMA ROBLOX TOURNAMENT". Tone: chaotic, funny, competitive, reality-TV drama between friends.
+
+Pick moments that are genuinely entertaining on their own: funny reactions, betrayals and alliances, eliminations, clutch wins or fails, trash talk between creators, big surprises. The first 2 seconds need a strong hook (a scream, a shocking line, a "no way", a vote or elimination starting), the clip must make sense with no context, and it should end on a payoff (reaction, punchline, result).
+
+REJECT (follows_rules = false) any clip that:
+- only works by taking a line out of context, or misrepresents what happened, Total Drama, Roblox, or any creator involved
+- is low-effort or engagement farming (dead air, menus, loading screens, nothing happening)
+- is hateful or mean-spirited toward any person or group
+
+Titles and captions: short, hype, curious (a question, a one-line tease, or a quote from the clip). Never misleading or clickbait about what happens. Don't tag or @ any creator (collab/tagging isn't allowed). Don't add any hashtags other than the ones in post.txt.

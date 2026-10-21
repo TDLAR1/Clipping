@@ -87,7 +87,8 @@ Useful options:
 | `--caption-color green` | `yellow` (default), `green`, `red`, `white` |
 | `--title-seconds 3` | show the clip's title at the top for the first 3 s |
 | `--layout blur` | always use the blurred-background layout (`center` = plain centre crop) |
-| `--layout split --cam 1332:0:586:330` | gaming clips: the streamer's facecam (box X:Y:W:H in the source) on top, gameplay below |
+| `--layout split --cam 1332:0:586:330` | gaming clips: the streamer's facecam (box X:Y:W:H in the source) on top, gameplay below; cuts to a full-screen webcam become a face crop |
+| `--center-captions` | captions exactly centred (default is slightly left, clear of the platforms' buttons) |
 | `--no-captions` | no captions (if the campaign gives its own) |
 | `--quality fast` | quicker export, slightly bigger files |
 | `--dry-run` | just list the moments it would pick |

@@ -63,6 +63,8 @@ def parse_args(argv=None):
     g.add_argument("--font-size", type=int, default=84)
     g.add_argument("--caption-pos", type=float, default=0.70,
                    help="caption height, 0 = top .. 1 = bottom (default 0.70)")
+    g.add_argument("--center-captions", action="store_true",
+                   help="centre captions exactly (default: slightly left, clear of the platforms' buttons)")
     g.add_argument("--lowercase", action="store_true", help="keep captions in normal case instead of CAPS")
     g.add_argument("--title-seconds", type=float, default=0,
                    help="show the clip title at the top for this many seconds (default off)")
@@ -181,7 +183,7 @@ def main(argv=None):
             clip.words, start, end, font=args.font, size=args.font_size,
             style=args.caption_color, uppercase=not args.lowercase,
             position=args.caption_pos, title=clip.title, title_seconds=args.title_seconds,
-            censor_words=words_to_censor,
+            censor_words=words_to_censor, centered=args.center_captions,
         )
         try:
             render.render(video, out_dir / fname, start, end, tr, ass, work / f"clip{i:02d}",

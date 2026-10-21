@@ -42,10 +42,12 @@ def build_ass(words, clip_start: float, clip_end: float, *, font: str = "Arial B
               size: int = 84, style: str = "yellow", uppercase: bool = True,
               max_words: int = 3, max_chars: int = 18, position: float = 0.70,
               title: str | None = None, title_seconds: float = 0.0,
-              censor_words: dict | None = None) -> str:
+              censor_words: dict | None = None, centered: bool = False) -> str:
     """ASS subtitle file for one 1080x1920 clip. Times are relative to clip_start."""
     base, hi, outline = STYLES.get(style, STYLES["yellow"])
     margin_v = int(1920 * (1 - position))
+    # Slightly left of centre by default, clear of the platforms' buttons on the right.
+    margin_l, margin_r = (80, 80) if centered else (80, 170)
     header = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: 1080
@@ -55,7 +57,7 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Cap,{font},{size},{base},{base},{outline},&H80000000,-1,0,0,0,100,100,1,0,1,7,3,2,80,170,{margin_v},1
+Style: Cap,{font},{size},{base},{base},{outline},&H80000000,-1,0,0,0,100,100,1,0,1,7,3,2,{margin_l},{margin_r},{margin_v},1
 Style: Title,{font},62,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,3,18,0,8,80,80,190,1
 
 [Events]

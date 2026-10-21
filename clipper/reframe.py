@@ -24,6 +24,7 @@ class Track:
     face_ratio: float = 0.0
     cam: tuple = None           # split: facecam box (x, y, w, h) in source pixels
     game: tuple = None          # split: gameplay box (x, y, w, h) in source pixels
+    webcam_shots: list = None   # split: [(t0, t1, crop_x)] where the whole frame is the webcam
 
 
 def _detectors():
@@ -62,7 +63,7 @@ def _sample(video_path, start, end):
         t = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000
         if t > end:
             break
-        if i % step == 0:
+        if True:  # every frame, so the layout switches exactly on the cut
             ok, frame = cap.retrieve()
             if ok:
                 h, w = frame.shape[:2]
@@ -117,13 +118,79 @@ def split_boxes(cam, frame_w, frame_h, out_w=1080, out_h=1920):
     return top_h, (game_x, 0, game_w, frame_h)
 
 
+def webcam_shots(video_path, start, end, frame_w, frame_h, crop_w, sat_limit=90):
+    """Find the stretches where a gaming video cuts to the streamer's webcam full screen.
+
+    Gameplay is far more colourful than a room, so each frame's saturation away
+    from the facecam corner tells the two apart. Returns [(t0, t1, crop_x)] in
+    clip time, with crop_x centred on the streamer's face."""
+    front, profile = _detectors()
+    cap = cv2.VideoCapture(str(video_path))
+    cap.set(cv2.CAP_PROP_POS_MSEC, start * 1000)
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30
+    times, is_cam, frames = [], [], {}
+    while True:
+        # Every frame, so the layout switches exactly on the cut.
+        ok, frame = cap.read()
+        if not ok:
+            break
+        t = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000
+        if t > end:
+            break
+        small = cv2.resize(frame, (192, 108), interpolation=cv2.INTER_AREA)
+        sat = cv2.cvtColor(small, cv2.COLOR_BGR2HSV)[30:, :120, 1].mean()
+        times.append(t - start)
+        is_cam.append(sat < sat_limit)
+        if len(times) % round(fps / 2) == 0:  # a face sample about twice a second
+            frames[len(times) - 1] = cv2.cvtColor(
+                cv2.resize(frame, (DETECT_WIDTH, DETECT_WIDTH * frame_h // frame_w)),
+                cv2.COLOR_BGR2GRAY)
+    cap.release()
+    if not times:
+        return []
+    # Smooth single-frame blips (a white flash in the game, a colourful shirt).
+    flags = np.array(is_cam, dtype=float)
+    k = 7
+    padded = np.pad(flags, k // 2, mode="edge")
+    flags = np.array([np.median(padded[j:j + k]) for j in range(len(flags))]) > 0.5
+
+    runs, j = [], 0
+    while j < len(flags):
+        if not flags[j]:
+            j += 1
+            continue
+        a = j
+        while j < len(flags) and flags[j]:
+            j += 1
+        runs.append((a, j))
+    if not runs:
+        return []
+    # The streamer sits still, and single detections are noisy, so one steady
+    # crop for the whole clip (the median face position) looks best.
+    scale = frame_w / DETECT_WIDTH
+    xs = []
+    for a, b in runs:
+        for idx in range(a, b):
+            if idx in frames:
+                found = _faces(frames[idx], front, profile, 24)
+                if found:
+                    xs.append(max(found, key=lambda f: f[1])[0] * scale)
+    face_x = float(np.median(xs)) if xs else frame_w / 2
+    crop_x = int(np.clip(face_x - crop_w / 2, 0, frame_w - crop_w))
+    # Switch halfway between the last frame of one shot and the first of the next.
+    edge = lambda k: round((times[k - 1] + times[k]) / 2, 3)
+    return [(edge(a) if a > 0 else 0.0, edge(b) if b < len(times) else round(end - start + 1, 3),
+             crop_x) for a, b in runs]
+
+
 def track(video_path, start, end, frame_w, frame_h, layout="auto", cam=None) -> Track:
     out_ratio = 9 / 16
     if frame_w / frame_h <= out_ratio + 0.01 or layout == "blur":
         return Track("fit")
-    if layout == "split":
-        return Track("split", cam=cam, game=split_boxes(cam, frame_w, frame_h)[1])
     crop_w = int(round(frame_h * out_ratio / 2) * 2)
+    if layout == "split":
+        return Track("split", crop_w, cam=cam, game=split_boxes(cam, frame_w, frame_h)[1],
+                     webcam_shots=webcam_shots(video_path, start, end, frame_w, frame_h, crop_w))
     center_x = (frame_w - crop_w) // 2
     if layout == "center":
         return Track("crop", crop_w, [(0.0, center_x, "cut")], 0.0)

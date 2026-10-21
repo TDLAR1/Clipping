@@ -26,12 +26,25 @@ def render(video: Path, out_file: Path, start: float, end: float, tr: Track,
         cx, cy, cw, ch = tr.cam
         gx, gy, gw, gh = tr.game
         top_h = int(round(OUT_W * ch / cw / 2) * 2)
+        shots = tr.webcam_shots or []
         video_chain = (
-            f"[0:v]split=2[cam][game];"
+            f"[0:v]split={3 if shots else 2}[cam][game]{'[full]' if shots else ''};"
             f"[cam]crop={cw}:{ch}:{cx}:{cy},scale={OUT_W}:{top_h}:flags=lanczos[top];"
             f"[game]crop={gw}:{gh}:{gx}:{gy},scale={OUT_W}:{OUT_H - top_h}:flags=lanczos[bot];"
             f"[top][bot]vstack,setsar=1"
         )
+        if shots:
+            # When the video cuts to the webcam full screen, show that instead,
+            # cropped to the streamer's face.
+            x_expr = str(shots[-1][2])
+            for t0, t1, x in reversed(shots[:-1]):
+                x_expr = f"if(lt(t,{t1:.3f}),{x},{x_expr})"
+            enable = "+".join(f"gte(t,{t0:.3f})*lt(t,{t1:.3f})" for t0, t1, _ in shots)
+            video_chain += (
+                f"[split];[full]crop=w={tr.crop_w}:h=ih:x='{x_expr}':y=0,"
+                f"scale={OUT_W}:{OUT_H}:flags=lanczos,setsar=1[face];"
+                f"[split][face]overlay=enable='{enable}'"
+            )
     else:
         video_chain = (
             f"[0:v]split=2[bg][fg];"
